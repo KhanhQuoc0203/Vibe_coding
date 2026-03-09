@@ -1,88 +1,86 @@
-import { useState, useEffect } from 'react';
+import React, { useState, useEffect } from 'react';
+import axios from 'axios';
 
-const API_URL = "http://127.0.0.1:8000/students";
+const API = "http://localhost:8000";
 
-export default function App() {
-  const [students, setStudents] = useState([]);
-  const [isEdit, setIsEdit] = useState(false);
-  const [form, setForm] = useState({ student_id: '', name: '', birth_year: 2000, major: '', gpa: 0 });
+function App() {
+    const [students, setStudents] = useState([]);
+    const [classes, setClasses] = useState([]);
+    const [stats, setStats] = useState({ total: 0, avg_gpa: 0, by_major: {} });
+    const [search, setSearch] = useState("");
+    const [form, setForm] = useState({ student_id: '', name: '', birth_year: 2000, major: '', gpa: 0, class_id: '' });
 
-  const loadData = async () => {
-    try {
-      const res = await fetch(API_URL);
-      const data = await res.json();
-      setStudents(data);
-    } catch (err) { console.error("Lỗi tải dữ liệu:", err); }
-  };
+    useEffect(() => {
+        loadData();
+        loadStats();
+    }, [search]);
 
-  useEffect(() => { loadData(); }, []);
-
-  const handleSubmit = async (e) => {
-    e.preventDefault();
-    // ÉP KIỂU DỮ LIỆU TRƯỚC KHI GỬI
-    const payload = {
-      ...form,
-      birth_year: parseInt(form.birth_year),
-      gpa: parseFloat(form.gpa)
+    const loadData = async () => {
+        const resS = await axios.get(`${API}/students?name=${search}`);
+        setStudents(resS.data);
+        const resC = await axios.get(`${API}/classes`);
+        setClasses(resC.data);
     };
 
-    const method = isEdit ? "PUT" : "POST";
-    const url = isEdit ? `${API_URL}/${form.student_id}` : API_URL;
+    const loadStats = async () => {
+        const res = await axios.get(`${API}/statistics`);
+        setStats(res.data);
+    };
 
-    try {
-      const res = await fetch(url, {
-        method,
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(payload)
-      });
-      if (res.ok) {
-        setForm({ student_id: '', name: '', birth_year: 2000, major: '', gpa: 0 });
-        setIsEdit(false);
+    const handleSave = async () => {
+        await axios.post(`${API}/students`, form);
         loadData();
-      }
-    } catch (err) { console.error("Lỗi khi lưu:", err); }
-  };
+        loadStats();
+    };
 
-  const handleEdit = (s) => { setForm(s); setIsEdit(true); };
+    return (
+        <div style={{ padding: '30px', maxWidth: '1000px', margin: 'auto' }}>
+            <h2>📊 Dashboard Thống kê</h2>
+            <div style={{ display: 'flex', gap: '20px', marginBottom: '30px' }}>
+                <div style={cardStyle}><b>Tổng SV:</b> {stats.total}</div>
+                <div style={cardStyle}><b>GPA TB:</b> {stats.avg_gpa}</div>
+            </div>
 
-  const handleDelete = async (id) => {
-    await fetch(`${API_URL}/${id}`, { method: "DELETE" });
-    loadData();
-  };
+            <div style={{ marginBottom: '20px' }}>
+                <input 
+                    placeholder="🔍 Tìm kiếm tên sinh viên..." 
+                    style={inputStyle} 
+                    onChange={(e) => setSearch(e.target.value)} 
+                />
+                <button onClick={() => window.open(`${API}/export-csv`)} style={btnExport}>Xuất CSV</button>
+            </div>
 
-  return (
-    <div style={{ padding: '20px', maxWidth: '900px', margin: 'auto', fontFamily: 'Arial' }}>
-      <h1 style={{ textAlign: 'center', color: '#333' }}>QUẢN LÝ SINH VIÊN MVP</h1>
-      
-      {/* FORM */}
-      <form onSubmit={handleSubmit} style={{ background: '#f9f9f9', padding: '20px', borderRadius: '8px', marginBottom: '20px', display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px' }}>
-        <input placeholder="Mã SV" value={form.student_id} onChange={e => setForm({...form, student_id: e.target.value})} disabled={isEdit} required />
-        <input placeholder="Họ tên" value={form.name} onChange={e => setForm({...form, name: e.target.value})} required />
-        <input type="number" placeholder="Năm sinh" value={form.birth_year} onChange={e => setForm({...form, birth_year: e.target.value})} />
-        <input placeholder="Ngành" value={form.major} onChange={e => setForm({...form, major: e.target.value})} />
-        <input type="number" step="0.1" placeholder="GPA" value={form.gpa} onChange={e => setForm({...form, gpa: e.target.value})} />
-        <button type="submit" style={{ background: isEdit ? '#ff9800' : '#4caf50', color: 'white', border: 'none', cursor: 'pointer' }}>
-          {isEdit ? 'Cập nhật' : 'Thêm mới'}
-        </button>
-      </form>
+            <div style={formBox}>
+                <h3>📝 Thêm Sinh Viên</h3>
+                <input placeholder="Mã SV" style={inputStyle} onChange={e => setForm({...form, student_id: e.target.value})} />
+                <input placeholder="Họ tên" style={inputStyle} onChange={e => setForm({...form, name: e.target.value})} />
+                <select style={inputStyle} onChange={e => setForm({...form, class_id: e.target.value})}>
+                    <option value="">-- Chọn Lớp --</option>
+                    {classes.map(c => <option key={c.class_id} value={c.class_id}>{c.class_name}</option>)}
+                </select>
+                <button onClick={handleSave} style={btnSave}>Lưu Dữ Liệu</button>
+            </div>
 
-      {/* TABLE */}
-      <table border="1" width="100%" style={{ borderCollapse: 'collapse', textAlign: 'left' }}>
-        <thead style={{ background: '#eee' }}>
-          <tr><th>ID</th><th>Tên</th><th>Ngành</th><th>GPA</th><th>Thao tác</th></tr>
-        </thead>
-        <tbody>
-          {students.map(s => (
-            <tr key={s.student_id}>
-              <td>{s.student_id}</td><td>{s.name}</td><td>{s.major}</td><td>{s.gpa}</td>
-              <td>
-                <button onClick={() => handleEdit(s)}>Sửa</button>
-                <button onClick={() => handleDelete(s.student_id)} style={{ color: 'red', marginLeft: '5px' }}>Xóa</button>
-              </td>
-            </tr>
-          ))}
-        </tbody>
-      </table>
-    </div>
-  );
+            <table border="1" style={{ width: '100%', borderCollapse: 'collapse' }}>
+                <thead style={{ background: '#f4f4f4' }}>
+                    <tr><th>ID</th><th>Họ tên</th><th>Ngành</th><th>GPA</th><th>Lớp</th></tr>
+                </thead>
+                <tbody>
+                    {students.map(s => (
+                        <tr key={s.student_id}>
+                            <td>{s.student_id}</td><td>{s.name}</td><td>{s.major}</td><td>{s.gpa}</td><td>{s.class_id}</td>
+                        </tr>
+                    ))}
+                </tbody>
+            </table>
+        </div>
+    );
 }
+
+const cardStyle = { padding: '15px', border: '1px solid #ddd', borderRadius: '8px', flex: 1, textAlign: 'center', background: '#e3f2fd' };
+const inputStyle = { padding: '8px', marginRight: '10px', borderRadius: '4px', border: '1px solid #ccc' };
+const formBox = { background: '#fafafa', padding: '20px', borderRadius: '8px', marginBottom: '20px' };
+const btnSave = { padding: '8px 20px', background: '#2196F3', color: 'white', border: 'none', cursor: 'pointer' };
+const btnExport = { padding: '8px 20px', background: '#4CAF50', color: 'white', border: 'none', cursor: 'pointer' };
+
+export default App;
